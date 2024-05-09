@@ -1,0 +1,124 @@
+---
+title: "Untitled"
+author: "Jonathan Zhu"
+date: "2024-02-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidymodels)
+library(readxl)
+library(janitor)
+library(dunn.test)
+library(writexl)
+```
+
+```{r}
+df = read_xlsx("samplingdata.xlsx")
+df <- clean_names(df)
+```
+
+```{r}
+aov(polyps_square_inch~substrate, data = df)
+summary(aov(polyps_square_inch~substrate, data = df))
+TukeyHSD(aov(polyps_square_inch~substrate, data = df))
+```
+
+```{r}
+site_comp = aov(polyps_square_inch~site, data = df)
+summary(site_comp)
+TukeyHSD(site_comp)
+```
+
+```{r}
+comp = aov(polyps_square_inch~site+substrate, data = df)
+summary(comp)
+```
+
+```{r}
+inv_comp = aov(inverts_per_sq_inch~substrate, data = df)
+summary(inv_comp)
+TukeyHSD(inv_comp)
+```
+
+```{r}
+ggplot(data = df, aes(x = substrate, y = polyps_square_inch)) + 
+  geom_col()
+
+#check normality of inverts
+#not normal lol
+ggplot(data = df, aes(x = inverts_per_sq_inch)) +
+  geom_histogram(bins = 15) +
+  facet_wrap(vars(substrate))
+```
+
+Nonparametrics
+```{r}
+#kruskal.test(polyps_square_inch ~ substrate, data = df)
+col_comp = dunn.test(c(df %>% filter(substrate == "HD") %>% select(polyps_square_inch),
+            df %>% filter(substrate == "Glass") %>% select(polyps_square_inch),
+            df %>% filter(substrate == "Plastic") %>% select(polyps_square_inch),
+            df %>% filter(substrate == "PD") %>% select(polyps_square_inch)))
+
+frust_comp = dunn.test(c(df %>% filter(substrate == "HD") %>% select(frust_sqare_inch),
+            df %>% filter(substrate == "Glass") %>% select(frust_sqare_inch),
+            df %>% filter(substrate == "Plastic") %>% select(frust_sqare_inch),
+            df %>% filter(substrate == "PD") %>% select(frust_sqare_inch)))
+```
+
+```{r}
+dunn.test(c(df %>% filter(location == "Barrington") %>% select(inverts_per_sq_inch),
+            df %>% filter(location == "Coal City") %>% select(inverts_per_sq_inch),
+            df %>% filter(location == "Wolf") %>% select(inverts_per_sq_inch)))
+```
+
+
+```{r}
+dunn.test(c(df %>% filter(substrate == "HD") %>% select(inverts_per_sq_inch),
+            df %>% filter(substrate == "Glass") %>% select(inverts_per_sq_inch),
+            df %>% filter(substrate == "Plastic") %>% select(inverts_per_sq_inch),
+            df %>% filter(substrate == "PD") %>% select(inverts_per_sq_inch)))
+```
+
+```{r}
+pod <- df %>% filter(podocysts == TRUE)
+
+summary_subst <- df %>% group_by(substrate) %>%
+  summarize(pol_mean = mean(polyps_square_inch), 
+            pol_err = sqrt(var(polyps_square_inch))/sqrt(length(polyps_square_inch)),
+            frust_mean = mean(frust_sqare_inch), 
+            frust_err = sqrt(var(frust_sqare_inch))/sqrt(length(frust_sqare_inch)),
+            inv_mean = mean(inverts_per_sq_inch),
+            inv_err = sqrt(var(inverts_per_sq_inch))/sqrt(length(inverts_per_sq_inch)))
+
+write_xlsx(summary_subst, "substrate_fig_stats.xlsx")
+```
+
+Figures
+
+```{r}
+fig_data <- read_xlsx("substrate_fig_stats.xlsx")
+
+ggplot(data = fig_data, aes(x = substrate, y = pol_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = pol_mean-pol_err, ymax = pol_mean+pol_err)) +
+  labs(x = "Substrate", y = "Polyps per Square Inch", 
+       title = "Mean Number of Polyps Found by Substrate")
+
+ggplot(data = fig_data, aes(x = substrate, y = frust_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = frust_mean-frust_err, ymax = frust_mean+frust_err)) +
+  labs(x = "Substrate", y = "Frustules per Square Inch", 
+       title = "Mean Number of Frustules Found by Substrate")
+
+ggplot(data = fig_data, aes(x = substrate, y = inv_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = inv_mean-inv_err, ymax = inv_mean+inv_err)) +
+  labs(x = "Substrate", y = "Other Invertebrates per Square Inch", 
+       title = "Mean Total Other Invertebrates Found by Substrate")
+
+save.image("samp.RData")
+```
+
