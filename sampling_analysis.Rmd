@@ -1,0 +1,268 @@
+---
+title: "Untitled"
+author: "Jonathan Zhu"
+date: "2024-02-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidymodels)
+library(readxl)
+library(janitor)
+library(dunn.test)
+library(writexl)
+library(plotrix)
+```
+
+```{r}
+df = read_xlsx("samplingdata.xlsx")
+df <- clean_names(df)
+```
+
+## Polyps per square cm: site comparison
+
+```{r}
+#normality 
+df_hd <- df %>% filter(substrate == "HD")
+df_pd <- df %>% filter(substrate == "PD")
+df_glass <- df %>% filter(substrate == "Glass")
+df_plastic <- df %>% filter(substrate == "Plastic")
+
+df_cc <- df %>% filter(location == "Coal City")
+df_bar <- df %>% filter(location == "Barrington")
+df_wolf <- df %>% filter(location == "Wolf")
+
+shapiro.test(df_hd$polyps_square_cm)
+shapiro.test(df_pd$polyps_square_cm)
+shapiro.test(df_glass$polyps_square_cm)
+shapiro.test(df_plastic$polyps_square_cm)
+
+shapiro.test(df_hd$frust_sqare_cm)
+shapiro.test(df_pd$frust_sqare_cm)
+shapiro.test(df_glass$frust_sqare_cm)
+shapiro.test(df_plastic$frust_sqare_cm)
+
+#anova; substrate comparison
+aov(polyps_square_cm~substrate, data = df)
+summary(aov(polyps_square_cm~substrate, data = df))
+TukeyHSD(aov(polyps_square_cm~substrate, data = df))
+```
+
+## Site Comparison
+
+```{r}
+#normality
+shapiro.test(df_bar$polyps_square_cm)
+shapiro.test(df_cc$polyps_square_cm)
+shapiro.test(df_wolf$polyps_square_cm)
+
+shapiro.test(df_bar$frust_sqare_cm)
+shapiro.test(df_cc$frust_sqare_cm)
+shapiro.test(df_wolf$frust_sqare_cm)
+
+shapiro.test(df_bar$inverts_per_sq_cm)
+shapiro.test(df_cc$inverts_per_sq_cm)
+shapiro.test(df_wolf$inverts_per_sq_cm)
+
+site_comp = aov(polyps_square_cm~site, data = df)
+summary(site_comp)
+TukeyHSD(site_comp)
+```
+
+```{r}
+#twoway
+comp = aov(polyps_square_cm~site+substrate, data = df)
+summary(comp)
+```
+
+## Other Inverts
+
+```{r}
+#normality
+shapiro.test(df_hd$inverts_per_sq_cm)
+shapiro.test(df_pd$inverts_per_sq_cm)
+shapiro.test(df_glass$inverts_per_sq_cm)
+shapiro.test(df_plastic$inverts_per_sq_cm)
+
+#anova
+inv_comp = aov(inverts_per_sq_cm~substrate, data = df)
+summary(inv_comp)
+TukeyHSD(inv_comp)
+```
+
+```{r}
+ggplot(data = df, aes(x = substrate, y = polyps_square_cm)) + 
+  geom_col()
+
+#check normality of inverts
+#not normal lol
+ggplot(data = df, aes(x = inverts_per_sq_cm)) +
+  geom_histogram(bins = 15) +
+  facet_wrap(vars(substrate))
+```
+
+Nonparametrics
+```{r}
+#kruskal.test(polyps_square_cm ~ substrate, data = df)
+col_comp = dunn.test(c(df %>% filter(substrate == "HD") %>% select(polyps_square_cm),
+            df %>% filter(substrate == "Glass") %>% select(polyps_square_cm),
+            df %>% filter(substrate == "Plastic") %>% select(polyps_square_cm),
+            df %>% filter(substrate == "PD") %>% select(polyps_square_cm)))
+col_comp$Z
+
+frust_comp = dunn.test(c(df %>% filter(substrate == "HD") %>% select(frust_sqare_cm),
+            df %>% filter(substrate == "Glass") %>% select(frust_sqare_cm),
+            df %>% filter(substrate == "Plastic") %>% select(frust_sqare_cm),
+            df %>% filter(substrate == "PD") %>% select(frust_sqare_cm)))
+frust_comp$Z
+```
+
+```{r}
+site_comp = dunn.test(c(df %>% filter(location == "Barrington") %>% select(inverts_per_sq_cm),
+            df %>% filter(location == "Coal City") %>% select(inverts_per_sq_cm),
+            df %>% filter(location == "Wolf") %>% select(inverts_per_sq_cm)))
+site_comp$Z
+```
+
+
+```{r}
+inv_comp = dunn.test(c(df %>% filter(substrate == "HD") %>% select(inverts_per_sq_cm),
+            df %>% filter(substrate == "Glass") %>% select(inverts_per_sq_cm),
+            df %>% filter(substrate == "Plastic") %>% select(inverts_per_sq_cm),
+            df %>% filter(substrate == "PD") %>% select(inverts_per_sq_cm)))
+inv_comp$Z
+```
+
+```{r}
+pod <- df %>% filter(podocysts == TRUE)
+
+summary_subst <- df %>% group_by(substrate) %>%
+  summarize(pol_mean = mean(polyps_square_cm), 
+            pol_err = sqrt(var(polyps_square_cm))/sqrt(length(polyps_square_cm)),
+            frust_mean = mean(frust_sqare_cm), 
+            frust_err = sqrt(var(frust_sqare_cm))/sqrt(length(frust_sqare_cm)),
+            inv_mean = mean(inverts_per_sq_cm),
+            inv_err = sqrt(var(inverts_per_sq_cm))/sqrt(length(inverts_per_sq_cm)))
+
+write_xlsx(summary_subst, "substrate_fig_stats.xlsx")
+```
+
+Figures
+
+```{r}
+fig_data <- read_xlsx("substrate_fig_stats.xlsx")
+
+ggplot(data = fig_data, aes(x = substrate, y = pol_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = pol_mean-pol_err, ymax = pol_mean+pol_err)) +
+  labs(x = "Substrate", y = "Polyps per Square cm", 
+       title = "Mean Number of Polyps Found by Substrate")
+
+ggplot(data = fig_data, aes(x = substrate, y = frust_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = frust_mean-frust_err, ymax = frust_mean+frust_err)) +
+  labs(x = "Substrate", y = "Frustules per Square cm", 
+       title = "Mean Number of Frustules Found by Substrate")
+
+ggplot(data = fig_data, aes(x = substrate, y = inv_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = inv_mean-inv_err, ymax = inv_mean+inv_err)) +
+  labs(x = "Substrate", y = "Other Invertebrates per Square cm", 
+       title = "Mean Total Other Invertebrates Found by Substrate")
+
+save.image("samp.RData")
+```
+
+## Preliminary Substrate Work
+
+```{r}
+substrate_data <- read_xlsx("CC_All.xlsx", sheet = "Substrate")
+substrate_data <- clean_names(substrate_data)
+
+substrate_data_glass <- substrate_data %>% filter(substrate == "Glass")
+substrate_data_plastic <- substrate_data %>% filter(substrate == "Plastic")
+
+#normality tests
+shapiro.test(substrate_data_glass$colonies)
+shapiro.test(substrate_data_plastic$colonies)
+
+shapiro.test(substrate_data_glass$polyps_per_colony) 
+shapiro.test(substrate_data_plastic$polyps_per_colony) 
+
+shapiro.test(substrate_data_glass$frustles)
+shapiro.test(substrate_data_plastic$frustles)
+
+ggplot(data = substrate_data, aes(x = polyps_per_colony)) +
+  geom_histogram()
+#am conflicted here - I used histogram for my first check and it looks normal to me
+#but shapiro test says definitely not normal. 
+
+#t-tests
+glass <- (substrate_data %>% filter(substrate == "Glass"))$colonies
+plast <- (substrate_data %>% filter(substrate == "Plastic"))$colonies
+t.test(glass, plast)
+
+glass <- (substrate_data %>% filter(substrate == "Glass"))$frustles
+plast <- (substrate_data %>% filter(substrate == "Plastic"))$frustles
+t.test(glass, plast)
+
+#mann whitney tests
+wilcox.test(colonies ~ substrate, data = substrate_data, exact = FALSE)
+wilcox.test(polyps ~ substrate, data = substrate_data, exact = FALSE)
+wilcox.test(frustles ~ substrate, data = substrate_data, exact = FALSE)
+wilcox.test(polyps_per_colony ~ substrate, data = substrate_data, exact = FALSE)
+```
+
+```{r}
+#sample numbers
+nrow(df_cc %>% filter(substrate == "Glass"))
+nrow(df_cc %>% filter(substrate == "Plastic"))
+nrow(df_cc %>% filter(substrate == "HD"))
+nrow(df_cc %>% filter(substrate == "PD"))
+
+nrow(df_bar %>% filter(substrate == "Glass"))
+nrow(df_bar %>% filter(substrate == "Plastic"))
+nrow(df_bar %>% filter(substrate == "HD"))
+nrow(df_bar %>% filter(substrate == "PD"))
+
+nrow(df_wolf %>% filter(substrate == "Glass"))
+nrow(df_wolf %>% filter(substrate == "Plastic"))
+nrow(df_wolf %>% filter(substrate == "HD"))
+nrow(df_wolf %>% filter(substrate == "PD"))
+
+#invertebrate numbers
+df_hd <- df %>% filter(substrate == "HD")
+df_pd <- df %>% filter(substrate == "PD")
+df_glass <- df %>% filter(substrate == "Glass")
+df_plastic <- df %>% filter(substrate == "Plastic")
+
+colSums(df_hd[,c(11:20)])
+colSums(df_pd[,c(11:20)])
+colSums(df_glass[,c(11:20)])
+colSums(df_plastic[,c(11:20)])
+
+#sanity check
+colSums(df[,c(11:20)])
+
+#standard error checks
+std.error(df_hd$inverts_per_sq_cm)
+std.error(df_pd$inverts_per_sq_cm)
+std.error(df_glass$inverts_per_sq_cm)
+std.error(df_plastic$inverts_per_sq_cm)
+
+std.error(df_hd$polyps_square_cm)
+std.error(df_pd$polyps_square_cm)
+std.error(df_glass$polyps_square_cm)
+std.error(df_plastic$polyps_square_cm)
+```
+
+```{r}
+#make violin plot
+#polyp number on y axis, substrate on x axis
+ggplot(data = df, aes(x = substrate, y = frust_sqare_cm)) +
+  geom_violin()
+```
+
+
