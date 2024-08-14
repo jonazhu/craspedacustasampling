@@ -1,0 +1,355 @@
+---
+title: "Untitled"
+author: "Jonathan Zhu"
+date: "2024-02-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidymodels)
+library(readxl)
+library(janitor)
+library(dunn.test)
+library(writexl)
+library(plotrix)
+library(ggsignif)
+```
+
+```{r}
+df = read_xlsx("samplingdata.xlsx")
+df <- clean_names(df)
+```
+
+## Polyps per square cm: site comparison
+
+```{r}
+#normality 
+df_hd <- df %>% filter(substrate == "HD")
+df_pd <- df %>% filter(substrate == "PD")
+df_glass <- df %>% filter(substrate == "Glass")
+df_plastic <- df %>% filter(substrate == "Plastic")
+
+df_cc <- df %>% filter(location == "Coal City")
+df_bar <- df %>% filter(location == "Barrington")
+df_wolf <- df %>% filter(location == "Wolf")
+
+shapiro.test(df_hd$polyps_square_cm)
+shapiro.test(df_pd$polyps_square_cm)
+shapiro.test(df_glass$polyps_square_cm)
+shapiro.test(df_plastic$polyps_square_cm)
+
+shapiro.test(df_hd$frust_sqare_cm)
+shapiro.test(df_pd$frust_sqare_cm)
+shapiro.test(df_glass$frust_sqare_cm)
+shapiro.test(df_plastic$frust_sqare_cm)
+
+#anova; substrate comparison
+aov(polyps_square_cm~substrate, data = df)
+summary(aov(polyps_square_cm~substrate, data = df))
+TukeyHSD(aov(polyps_square_cm~substrate, data = df))
+```
+
+## Site Comparison
+
+```{r}
+#normality
+shapiro.test(df_bar$polyps_square_cm)
+shapiro.test(df_cc$polyps_square_cm)
+shapiro.test(df_wolf$polyps_square_cm)
+
+shapiro.test(df_bar$frust_sqare_cm)
+shapiro.test(df_cc$frust_sqare_cm)
+shapiro.test(df_wolf$frust_sqare_cm)
+
+shapiro.test(df_bar$inverts_per_sq_cm)
+shapiro.test(df_cc$inverts_per_sq_cm)
+shapiro.test(df_wolf$inverts_per_sq_cm)
+
+site_comp = aov(polyps_square_cm~site, data = df)
+summary(site_comp)
+TukeyHSD(site_comp)
+```
+
+```{r}
+#twoway
+comp = aov(polyps_square_cm~site+substrate, data = df)
+summary(comp)
+```
+
+## Other Inverts
+
+```{r}
+#normality
+shapiro.test(df_hd$inverts_per_sq_cm)
+shapiro.test(df_pd$inverts_per_sq_cm)
+shapiro.test(df_glass$inverts_per_sq_cm)
+shapiro.test(df_plastic$inverts_per_sq_cm)
+
+#anova
+inv_comp = aov(inverts_per_sq_cm~substrate, data = df)
+summary(inv_comp)
+TukeyHSD(inv_comp)
+```
+
+```{r}
+ggplot(data = df, aes(x = substrate, y = polyps_square_cm)) + 
+  geom_col()
+
+#check normality of inverts
+#not normal lol
+ggplot(data = df, aes(x = inverts_per_sq_cm)) +
+  geom_histogram(bins = 15) +
+  facet_wrap(vars(substrate))
+```
+
+Nonparametrics
+```{r}
+#kruskal.test(polyps_square_cm ~ substrate, data = df)
+col_comp = dunn.test(c(df %>% filter(substrate == "HD") %>% select(polyps_square_cm),
+            df %>% filter(substrate == "Glass") %>% select(polyps_square_cm),
+            df %>% filter(substrate == "Plastic") %>% select(polyps_square_cm),
+            df %>% filter(substrate == "PD") %>% select(polyps_square_cm)))
+col_comp$Z
+
+frust_comp = dunn.test(c(df %>% filter(substrate == "HD") %>% select(frust_sqare_cm),
+            df %>% filter(substrate == "Glass") %>% select(frust_sqare_cm),
+            df %>% filter(substrate == "Plastic") %>% select(frust_sqare_cm),
+            df %>% filter(substrate == "PD") %>% select(frust_sqare_cm)))
+frust_comp$Z
+```
+
+```{r}
+site_comp = dunn.test(c(df %>% filter(location == "Barrington") %>% select(polyps_square_cm),
+            df %>% filter(location == "Coal City") %>% select(polyps_square_cm),
+            df %>% filter(location == "Wolf") %>% select(polyps_square_cm)))
+site_comp$Z
+```
+
+
+```{r}
+inv_comp = dunn.test(c(df %>% filter(substrate == "HD") %>% select(inverts_per_sq_cm),
+            df %>% filter(substrate == "Glass") %>% select(inverts_per_sq_cm),
+            df %>% filter(substrate == "Plastic") %>% select(inverts_per_sq_cm),
+            df %>% filter(substrate == "PD") %>% select(inverts_per_sq_cm)))
+inv_comp$Z
+```
+
+```{r}
+pod <- df %>% filter(podocysts == TRUE)
+
+summary_subst <- df %>% group_by(substrate) %>%
+  summarize(pol_mean = mean(polyps_square_cm), 
+            pol_err = sqrt(var(polyps_square_cm))/sqrt(length(polyps_square_cm)),
+            frust_mean = mean(frust_sqare_cm), 
+            frust_err = sqrt(var(frust_sqare_cm))/sqrt(length(frust_sqare_cm)),
+            inv_mean = mean(inverts_per_sq_cm),
+            inv_err = sqrt(var(inverts_per_sq_cm))/sqrt(length(inverts_per_sq_cm)))
+
+write_xlsx(summary_subst, "substrate_fig_stats.xlsx")
+```
+
+Figures
+
+```{r}
+fig_data <- read_xlsx("substrate_fig_stats.xlsx")
+
+ggplot(data = fig_data, aes(x = substrate, y = pol_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = pol_mean-pol_err, ymax = pol_mean+pol_err)) +
+  labs(x = "Substrate", y = "Polyps per Square cm", 
+       title = "Mean Number of Polyps Found by Substrate")
+
+ggplot(data = fig_data, aes(x = substrate, y = frust_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = frust_mean-frust_err, ymax = frust_mean+frust_err)) +
+  labs(x = "Substrate", y = "Frustules per Square cm", 
+       title = "Mean Number of Frustules Found by Substrate")
+
+ggplot(data = fig_data, aes(x = substrate, y = inv_mean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = inv_mean-inv_err, ymax = inv_mean+inv_err)) +
+  labs(x = "Substrate", y = "Other Invertebrates per Square cm", 
+       title = "Mean Total Other Invertebrates Found by Substrate")
+
+save.image("samp.RData")
+```
+
+## Preliminary Substrate Work
+
+```{r}
+substrate_data <- read_xlsx("CC_All.xlsx", sheet = "Substrate")
+substrate_data <- clean_names(substrate_data)
+
+substrate_data_glass <- substrate_data %>% filter(substrate == "Glass")
+substrate_data_plastic <- substrate_data %>% filter(substrate == "Plastic")
+
+#normality tests
+shapiro.test(substrate_data_glass$colonies)
+shapiro.test(substrate_data_plastic$colonies)
+
+shapiro.test(substrate_data_glass$polyps_per_colony) 
+shapiro.test(substrate_data_plastic$polyps_per_colony) 
+
+shapiro.test(substrate_data_glass$frustles)
+shapiro.test(substrate_data_plastic$frustles)
+
+ggplot(data = substrate_data, aes(x = polyps_per_colony)) +
+  geom_histogram()
+#am conflicted here - I used histogram for my first check and it looks normal to me
+#but shapiro test says definitely not normal. 
+
+#t-tests
+glass <- (substrate_data %>% filter(substrate == "Glass"))$colonies
+plast <- (substrate_data %>% filter(substrate == "Plastic"))$colonies
+t.test(glass, plast)
+
+glass <- (substrate_data %>% filter(substrate == "Glass"))$frustles
+plast <- (substrate_data %>% filter(substrate == "Plastic"))$frustles
+t.test(glass, plast)
+
+#mann whitney tests
+wilcox.test(colonies ~ substrate, data = substrate_data, exact = FALSE)
+wilcox.test(polyps ~ substrate, data = substrate_data, exact = FALSE)
+wilcox.test(frustles ~ substrate, data = substrate_data, exact = FALSE)
+wilcox.test(polyps_per_colony ~ substrate, data = substrate_data, exact = FALSE)
+```
+
+```{r}
+#sample numbers
+nrow(df_cc %>% filter(substrate == "Glass"))
+nrow(df_cc %>% filter(substrate == "Plastic"))
+nrow(df_cc %>% filter(substrate == "HD"))
+nrow(df_cc %>% filter(substrate == "PD"))
+
+nrow(df_bar %>% filter(substrate == "Glass"))
+nrow(df_bar %>% filter(substrate == "Plastic"))
+nrow(df_bar %>% filter(substrate == "HD"))
+nrow(df_bar %>% filter(substrate == "PD"))
+
+nrow(df_wolf %>% filter(substrate == "Glass"))
+nrow(df_wolf %>% filter(substrate == "Plastic"))
+nrow(df_wolf %>% filter(substrate == "HD"))
+nrow(df_wolf %>% filter(substrate == "PD"))
+
+#invertebrate numbers
+df_hd <- df %>% filter(substrate == "HD")
+df_pd <- df %>% filter(substrate == "PD")
+df_glass <- df %>% filter(substrate == "Glass")
+df_plastic <- df %>% filter(substrate == "Plastic")
+
+colSums(df_hd[,c(11:20)])
+colSums(df_pd[,c(11:20)])
+colSums(df_glass[,c(11:20)])
+colSums(df_plastic[,c(11:20)])
+
+#sanity check
+colSums(df[,c(11:20)])
+
+#standard error checks
+std.error(df_hd$inverts_per_sq_cm)
+std.error(df_pd$inverts_per_sq_cm)
+std.error(df_glass$inverts_per_sq_cm)
+std.error(df_plastic$inverts_per_sq_cm)
+
+std.error(df_hd$polyps_square_cm)
+std.error(df_pd$polyps_square_cm)
+std.error(df_glass$polyps_square_cm)
+std.error(df_plastic$polyps_square_cm)
+```
+
+```{r}
+#i want to add more columns to this dataframe
+#these columns will be the percentage of the slides that have non-zero values for polyps
+#same for frustules and podocysts
+
+#first, i need to get the number of slides for each substrate
+n_slides <- df %>% group_by(substrate) %>%
+  summarize(n = n())
+
+#then, i need to get the number of slides with non-zero values for each substrate
+#and also where the podocyst column is TRUE
+n_nonzero <- df %>% group_by(substrate) %>%
+  summarize(Polyps = sum(polyps_square_cm > 0),
+            Frustules = sum(frust_sqare_cm > 0),
+            Podocysts = sum(podocysts == TRUE))
+
+#now, i need to calculate the percentage of slides with non-zero values
+n_nonzero <- n_nonzero %>% left_join(n_slides, by = "substrate") %>%
+  mutate(Polyps = Polyps/n,
+         Frustules = Frustules/n,
+         Podocysts = Podocysts/n)
+
+#to make this into a format that can work for ggplot, we need to make the data longer
+n_nonzero <- n_nonzero %>% pivot_longer(cols = c(Polyps, Frustules, Podocysts), names_to = "variable", values_to = "value")
+
+#multiply all value entries by 100
+n_nonzero <- n_nonzero %>% mutate(value = value * 100)
+
+#rename the entries in the substrate column
+n_nonzero <- n_nonzero %>% mutate(substrate = ifelse(substrate == "HD", "Hester-Dendy", 
+                                                     ifelse(substrate == "PD", "Petri Dish", 
+                                                            ifelse(substrate == "Glass", "Glass Slide", 
+                                                                  ifelse(substrate == "Plastic", "Plastic Slide", NA)))))
+```
+
+```{r}
+#make a bar plot of the percentages from the previous chunk, or the n_nonzero dataframe
+#the x-axis is the substrate, y-axis is the percentage, grouped by the invertebrate type
+#also add a black border to each bar
+#and a gap between the bars for each group (tiny gap)
+ggplot(data = n_nonzero, aes(x = substrate, y = value, fill = variable)) +
+  geom_col(width = 0.7, position = position_dodge(0.8), color = "black") +
+  labs(x = "Substrate", y = "Samples Colonized (%)", 
+       fill = "", tag = "A") +
+  scale_fill_manual(values = c("blue", "gold", "brown")) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        legend.title = element_text(size = 18),
+        legend.text = element_text(size = 17),
+        plot.title = element_text(size = 20),
+        plot.tag.position = c(0.08, 0.97),
+        plot.tag = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        axis.text = element_text(size = 17))
+```
+
+```{r}
+#make a box plot of the number of polyps and frustules per square cm
+
+#to start, we need to make a new dataframe with the data being longer
+#so the substrate will be the x-axis, the y-axis will be the number of polyps or frustules
+#and the color will be either frustules or polyps
+
+df_long <- df %>% pivot_longer(cols = c(polyps_square_cm, frust_sqare_cm), names_to = "variable", values_to = "value")
+
+#rename the entries in the variable column to be more descriptive
+df_long <- df_long %>% mutate(variable = ifelse(variable == "polyps_square_cm", "Polyps", "Frustules"))
+
+#rename the entries in the substrate column to be more descriptive
+df_long <- df_long %>% mutate(substrate = ifelse(substrate == "HD", "Hester-Dendy", 
+                                                 ifelse(substrate == "PD", "Petri Dish", 
+                                                        ifelse(substrate == "Glass", "Glass Slide", 
+                                                              ifelse(substrate == "Plastic", "Plastic Slide", NA)))))
+
+#now we can make the box plot
+#also change the legend titles to be more descriptive
+ggplot(data = df_long, aes(x = substrate, y = value, color = variable)) +
+  geom_boxplot() +
+  labs(x = "Substrate", y = "Individuals /" ~ cm^2, 
+       color = "", tag = "B") +
+  scale_color_manual(values = c("blue", "brown")) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        legend.title = element_text(size = 18),
+        legend.text = element_text(size = 17),
+        plot.title = element_text(size = 20),
+        plot.tag.position = c(0.115, 0.97),
+        plot.tag = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        axis.text = element_text(size = 17))
+
+```
